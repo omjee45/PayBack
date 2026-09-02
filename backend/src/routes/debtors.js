@@ -14,7 +14,6 @@ router.get('/', async (req, res) => {
     const debtors = await prisma.debtor.findMany({
       include: {
         invoices: {
-          include: { promises: true },
           select:  { id: true, status: true, amountPaise: true, promises: true },
         },
       },
