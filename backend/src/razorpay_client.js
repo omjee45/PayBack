@@ -73,7 +73,7 @@ async function createPaymentLink(params) {
   return { id: link.id, short_url: link.short_url };
 }
 
-// ─── Webhook signature verification ──────────────────────────────────────
+// ─── Webhook signature verification ──────────────────────
 
 /**
  * Verifies a Razorpay webhook signature.

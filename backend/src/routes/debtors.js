@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
         invoices: {
           select:  { id: true, status: true, amountPaise: true, promises: true },
         },
-      },
+      }, 
       orderBy: { reliabilityScore: 'asc' }, // worst first
     });
 
