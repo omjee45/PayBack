@@ -1,0 +1,31 @@
+{
+  "name": "payback-backend",
+  "version": "1.0.0",
+  "description": "PayBack — B2B Receivables Chaser API (Node + Express + Prisma + Gemini)",
+  "main": "src/index.js",
+  "scripts": {
+    "dev":        "node --watch src/index.js",
+    "start":      "node src/index.js",
+    "seed":       "node prisma/seed.js",
+    "db:push":    "prisma db push",
+    "db:generate":"prisma generate",
+    "db:reset":   "prisma db push --force-reset && node prisma/seed.js",
+    "db:studio":  "prisma studio"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.17.0",
+    "@prisma/client":        "^5.16.0",
+    "cors":                  "^2.8.5",
+    "dotenv":                "^16.4.5",
+    "express":               "^4.19.2",
+    "node-cron":             "^3.0.3",
+    "razorpay":              "^2.9.4",
+    "zod":                   "^3.23.8"
+  },
+  "devDependencies": {
+    "prisma": "^5.16.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}

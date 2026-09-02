@@ -1,0 +1,17 @@
+import { Routes, Route } from 'react-router-dom'
+import Layout       from './components/Layout'
+import Dashboard    from './pages/Dashboard'
+import InvoiceDetail from './pages/InvoiceDetail'
+import DebtorDetail  from './pages/DebtorDetail'
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index                    element={<Dashboard />} />
+        <Route path="invoices/:id"      element={<InvoiceDetail />} />
+        <Route path="debtors/:id"       element={<DebtorDetail />} />
+      </Route>
+    </Routes>
+  )
+}

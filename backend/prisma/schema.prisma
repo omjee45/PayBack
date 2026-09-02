@@ -1,0 +1,97 @@
+// This is your Prisma schema file
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Debtor ───────────────────────────────────────────────────────────────
+// A business entity that owes money. One debtor can have many invoices.
+
+model Debtor {
+  id                 String    @id @default(cuid())
+  name               String
+  contactEmail       String?
+  contactPhone       String?
+  preferredLanguage  String    @default("en")   // "en" | "hi-en"
+  reliabilityScore   Float     @default(100)     // 0-100, drops on broken promise
+  createdAt          DateTime  @default(now())
+
+  invoices           Invoice[]
+}
+
+// ─── Invoice ──────────────────────────────────────────────────────────────
+// A single receivable. Progresses through the escalation state machine.
+
+model Invoice {
+  id                       String    @id @default(cuid())
+  debtorId                 String
+  amountPaise              BigInt                           // store in paise (₹ × 100)
+  dueDate                  DateTime
+  status                   String    @default("DUE")
+  // DUE → GENTLE → FIRM → PROMISED → ESCALATION → LEGAL_FLAG
+  // Any state → PAID (terminal, via webhook)
+
+  razorpayPaymentLinkId    String?
+  razorpayPaymentLinkUrl   String?
+  razorpayPaymentId        String?                          // set when payment.captured fires
+  paidAt                   DateTime?
+
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  debtor                   Debtor    @relation(fields: [debtorId], references: [id])
+  reminders                Reminder[]
+  promises                 Promise[]
+  events                   Event[]
+}
+
+// ─── Reminder ─────────────────────────────────────────────────────────────
+// Each message sent to a debtor at a given escalation tier.
+
+model Reminder {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  tier        String                           // GENTLE | FIRM | ESCALATION
+  channel     String   @default("whatsapp")
+  messageText String
+  language    String   @default("en")
+  sentAt      DateTime @default(now())
+
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+}
+
+// ─── Promise ──────────────────────────────────────────────────────────────
+// A structured commitment extracted from a debtor's reply.
+
+model Promise {
+  id                    String    @id @default(cuid())
+  invoiceId             String
+  rawReplyText          String                         // original debtor message
+  promisedDate          DateTime
+  extractionConfidence  Float?                         // 0.0–1.0 from Gemini
+  status                String    @default("PENDING")  // PENDING | KEPT | BROKEN
+  createdAt             DateTime  @default(now())
+  resolvedAt            DateTime?
+
+  invoice               Invoice   @relation(fields: [invoiceId], references: [id])
+}
+
+// ─── Event ────────────────────────────────────────────────────────────────
+// Full audit trail. Every state change, reminder, webhook, and promise action.
+
+model Event {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  eventType   String
+  // STATE_CHANGE | REMINDER_SENT | PROMISE_CAPTURED | PROMISE_KEPT | PROMISE_BROKEN | WEBHOOK_RECEIVED
+  payload     String   @default("{}")   // JSON blob
+  createdAt   DateTime @default(now())
+
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+}
