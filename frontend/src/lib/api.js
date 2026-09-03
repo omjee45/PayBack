@@ -23,6 +23,7 @@ export const api = {
   getInvoices:  (status)     => req(`/api/invoices${status ? `?status=${encodeURIComponent(status)}` : ''}`),
   getInvoice:   (id)         => req(`/api/invoices/${id}`),
   createInvoice:(data)       => req('/api/invoices',            { method: 'POST', body: JSON.stringify(data) }),
+  generatePaymentLink:(id)   => req(`/api/invoices/${id}/payment-link`, { method: 'POST' }),
   simulateReply:(id, text)   => req(`/api/invoices/${id}/simulate-reply`, { method: 'POST', body: JSON.stringify({ reply_text: text }) }),
 
   // Debtors

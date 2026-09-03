@@ -18,6 +18,7 @@ export default function InvoiceDetail() {
   const [invoice, setInv]  = useState(null)
   const [loading, setLoad] = useState(true)
   const [showReply, setReply] = useState(false)
+  const [generatingLink, setGeneratingLink] = useState(false)
 
   const load = async () => {
     setLoad(true)
@@ -81,6 +82,25 @@ export default function InvoiceDetail() {
                 className="btn-ghost text-xs gap-1.5">
                 Payment Link <ExternalLink size={12} />
               </a>
+            )}
+            {!invoice.razorpayPaymentLinkUrl?.includes('rzp.io/i/') && (
+              <button 
+                onClick={async () => {
+                  setGeneratingLink(true)
+                  try {
+                    const res = await api.generatePaymentLink(id)
+                    setInv(prev => ({ ...prev, razorpayPaymentLinkUrl: res.paymentLinkUrl }))
+                  } catch (e) {
+                    alert('Failed to generate link: ' + e.message)
+                  } finally {
+                    setGeneratingLink(false)
+                  }
+                }} 
+                disabled={generatingLink}
+                className="btn-primary text-xs gap-1.5"
+              >
+                {generatingLink ? 'Generating...' : 'Generate Real Link'}
+              </button>
             )}
             {canSimulate && (
               <button onClick={() => setReply(true)} className="btn-primary text-xs gap-1.5">
