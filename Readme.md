@@ -112,7 +112,7 @@ frontend/         React · Vite · Tailwind CSS
 
 ---
 
-## What broke (read this — it's more useful than what worked)
+## What broke
 
 **1. Gemini's API key format changed mid-build.**
 Google migrated from `AIza...` Standard keys to `AQ...` Auth keys in June 2026. Our SDK was outdated and rejected the new format with `401 UNAUTHENTICATED`. The error message said "invalid key" even though the key was correct, which sent us hunting in the wrong direction. Fix: updated `@google/generative-ai` to latest, forced `dotenv.config({ override: true })` after discovering a stale Windows environment variable was winning over `.env` (dotenv's default doesn't overwrite existing env vars).
