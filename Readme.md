@@ -1,180 +1,181 @@
+<div align="center">
+
 # PayBack
+### AI Collections Agent · Razorpay Hackathon 2026 · Track 03: AI Revenue Recovery
 
-**B2B Receivables Chaser with Promise-to-Pay Tracking**
+**PayBack doesn't send reminders. It holds debtors accountable to their own promises.**
 
-![Track](https://img.shields.io/badge/Track_03-AI_Revenue_Recovery-7c3aed?style=flat-square)
-![Stack](https://img.shields.io/badge/Stack-Node_·_Express_·_React_·_Prisma-0ea5e9?style=flat-square)
-![AI](https://img.shields.io/badge/AI-Gemini_3.1_Flash_Lite-4ade80?style=flat-square&logo=google)
-![Payments](https://img.shields.io/badge/Payments-Razorpay_Payment_Links-2563eb?style=flat-square)
-![Hackathon](https://img.shields.io/badge/Razorpay_Hackathon-2026-e11d48?style=flat-square)
+[![Track](https://img.shields.io/badge/Track-03%20AI%20Revenue%20Recovery-7c3aed?style=flat-square)](https://razorpay.com)
+[![Stack](https://img.shields.io/badge/Stack-Node%20·%20Express%20·%20React%20·%20Prisma-0f172a?style=flat-square)](https://github.com/omjee45/PayBack)
+[![AI](https://img.shields.io/badge/AI-Gemini%203.1%20Flash%20Lite-4285f4?style=flat-square)](https://ai.google.dev)
+[![Payments](https://img.shields.io/badge/Payments-Razorpay%20Test%20Mode-072654?style=flat-square)](https://razorpay.com)
 
----
-
-## The Problem
-
-Indian SMEs chase overdue invoices manually — WhatsApp messages typed one by one, no tracking, no escalation logic, no record of what a debtor promised. When a debtor says *"kal tak kar deta hoon"*, that commitment disappears into a chat thread. When they don't pay, the chase starts from scratch.
-
-PayBack automates the entire collection cycle — from the first gentle nudge to legal referral — while tracking every promise a debtor makes and using it against them (politely) if they break it.
+</div>
 
 ---
 
-## What It Does
+## The problem
 
-### Escalation State Machine
+Indian SMEs invoice clients via Razorpay Payment Links and Smart Collect, then chase payment manually over WhatsApp for weeks.
 
-Every invoice moves through a deterministic pipeline:
+The chase is unstructured. There's no escalation logic. And when a client says *"will pay by Friday"* — that promise lives in someone's head, not a system. When Friday passes and no payment arrives, nobody escalates any harder than the first time.
 
-```
-DUE → GENTLE → FIRM → ESCALATION → LEGAL_FLAG (terminal, human handoff)
-                                 ↑
-                         PAID (terminal, from any state via webhook)
-```
-
-Each transition is triggered by elapsed days. The escalation engine runs on a tick-based demo clock (one click = one day passes) so judges can watch the full lifecycle in minutes.
-
-### Promise-to-Pay Tracking
-
-When a debtor replies — in English, Hindi, or Hinglish — their message goes to Gemini:
-
-```
-Input:  "bhai thoda time chahiye, 15 tak pakka kar deta hoon"
-Output: { has_promise: true, promised_date: "2026-09-15", confidence: 0.91 }
-```
-
-If a promise exists:
-- The escalation clock **pauses** until the promised date
-- If the date passes without payment → the invoice **skips a tier** and the next reminder explicitly references the broken commitment
-- If payment arrives before the date → promise is marked `KEPT`, debtor reliability score increases
-
-### Stopping Rule
-
-`payment.captured` webhook from Razorpay immediately marks the invoice `PAID` and halts all future reminders — permanently, from any state. No polling, no cron check, no race condition.
-
-### Hinglish Safety Net
-
-Gemini occasionally ignores language instructions and returns pure English for `hi-en` debtors. The fix is not more prompt engineering — it's a verification layer:
-
-```
-Gemini response → looksLikeHinglish()? (checks ≥2 Hindi word markers, whole-word regex)
-  YES → ship it
-  NO  → retry once with explicit correction prompt
-         └── still English? → deterministic Hinglish template (always correct)
-```
-
-Wrong-language output never reaches a debtor.
+**PayBack closes that loop end-to-end.**
 
 ---
 
-## Demo Numbers
+## What it does
 
-Shreeji Textiles, Surat — a garment wholesaler with 55 outstanding invoices across 18 debtors.
+```
+Invoice created → overdue detected → right message sent → promise captured
+→ promise broken → tier skipped → escalation → payment received → chase stops
+```
+
+Every step is automated. Every step is auditable. Every step stops the moment Razorpay confirms payment.
+
+### The core mechanic: Promise-to-Pay Tracking
+
+When a debtor replies *"bhai kal tak kar denge, thoda issue tha"* — PayBack extracts a structured commitment:
+
+```json
+{
+  "has_promise": true,
+  "promised_date": "2026-09-10",
+  "confidence": 0.88,
+  "reasoning": "Debtor used 'kal' which resolves to tomorrow's date"
+}
+```
+
+Escalation clock **pauses** until that date. If they pay — the chase stops permanently, via webhook. If they don't — they skip a tier and the next message explicitly references the broken commitment. That's a real collections-industry technique, not a reminder bot with a fancier UI.
+
+---
+
+## Results across 55 invoices
 
 | Metric | Value |
 |---|---|
-| Total invoiced | ₹15.6L |
-| Recovered | ₹9.5L |
+| Total recovered | ₹9.5L |
 | Recovery rate | 60.78% |
-| Paid at GENTLE tier | 22 invoices |
-| Paid after FIRM reminder | 14 invoices |
-| Broken-promise skip-tier escalations | 6 invoices |
-| LEGAL_FLAG (could not recover) | 5 invoices |
+| Invoices recovered at GENTLE tier | 22 |
+| Invoices recovered after FIRM reminder | 14 |
+| Promises kept | 8 |
+| Promises broken → tier-skipped escalation | 6 |
+| Could not recover (LEGAL_FLAG) | 5 |
 
-The 5 LEGAL_FLAG exceptions are shown plainly in a "Could Not Recover" panel on the dashboard — not hidden in a filter.
+The 5 failures are shown plainly on the dashboard. An agent that claims 100% recovery is lying.
 
 ---
 
-## AI Judgment
+## Escalation state machine
 
-This is the part that usually goes unsaid. Here's exactly where Gemini is used, and where it deliberately isn't:
+```
+DUE ──(1-3 days overdue)──► GENTLE
+    ──(4-7 days)──────────► FIRM
+    ──(8-14 days)─────────► ESCALATION ──(15+ days)──► LEGAL_FLAG (terminal)
 
-| What | Approach | Why |
+Promise captured at any tier → status: PROMISED (clock paused)
+  ├── Promise kept (paid before date) → PAID + reliability score +5
+  └── Promise broken (date passed) → skip one tier up + message references broken date
+
+payment.captured webhook (any state) → PAID immediately, permanently, stops everything
+```
+
+---
+
+## AI usage — right tool, right place
+
+| What | Model | Why AI, not a rule |
 |---|---|---|
-| Reminder generation | **Gemini** | Tone + language + broken-promise context = too many variables for a template |
-| Promise extraction | **Gemini** | Resolves relative dates from natural Hinglish — *"kal"*, *"next Friday"*, *"end of month"* |
-| Hinglish detection | **Rule-based word list** | Binary check — faster, cheaper, and more reliable than an LLM call |
-| Escalation thresholds | **Deterministic day-count** | Compliance decision — AI shouldn't decide when to escalate |
-| Stopping rule | **Razorpay webhook** | Must be instant and guaranteed — no AI in the loop |
-
-Gemini handles exactly two things: writing and understanding language. Everything else is deterministic.
+| Reminder generation | Gemini 3.1 Flash Lite | Tone must match tier + language + broken-promise context — too many variables for a template |
+| Promise extraction | Gemini 3.1 Flash Lite | Resolves relative dates ("kal", "next Friday", "end of month") from natural language, including Hinglish |
+| Hinglish detection | Rule-based word list | AI isn't needed here — a 20-word Hindi marker list is faster, cheaper, and more reliable for a binary check |
+| Escalation thresholds | Deterministic (day count) | AI shouldn't decide when to escalate — that's a compliance decision, not a judgment call |
+| Stopping rule | Razorpay webhook | The moment money lands, the chase stops. No AI in the loop — this must be instant and guaranteed |
 
 ---
 
-## What Broke (Read This)
+## Tech stack
 
-### 1 — Gemini API key format migration (AIza → AQ.)
+```
+backend/          Node.js · Express · Prisma ORM · SQLite
+  escalation_engine.js   State machine — the core of the system
+  reminder_generator.js  Gemini API · English + Hinglish · retry-on-language-slip
+  promise_extractor.js   Gemini API · strict JSON output · relative date resolution
+  razorpay_client.js     Payment Links API · webhook signature verification
 
-Google migrated AI Studio to issue `AQ.` format auth keys in mid-2026. The `@google/generative-ai` SDK was hardcoded to reject anything that didn't start with `AIza`. The backend started and logged `Gemini: ✅ configured` (a non-empty key check) while silently falling back to regex extraction on every call.
-
-**Root cause hunt:** We spent 45 minutes checking the wrong things — network calls, model names, quota limits — before running a prefix log that showed the key being sent was `AQ.Ab8RN6J...` and the SDK was the one rejecting it.
-
-**Fix:** Migrated to `@google/genai` (the new unified SDK). Also discovered that `dotenv` doesn't overwrite existing Windows environment variables by default — a stale `GEMINI_API_KEY=AIzaSy...` set months earlier in the system environment was silently winning over `.env`. Fixed with `dotenv.config({ override: true })`.
-
-### 2 — Webhook "stream is not readable" on first real payment
-
-`express.json()` was registered globally. When Razorpay's webhook fired, the JSON middleware consumed the raw request body before the webhook route could read it for HMAC signature verification. The handler crashed, the payment went unprocessed.
-
-**Fix:** Mounted the webhook route *before* `express.json()`, using `express.raw({ type: 'application/json' })` specifically for `/api/webhooks`. The raw Buffer is now converted to a string for signature verification, then JSON-parsed for logic — in that order.
-
-### 3 — Race condition on double-click Reset Demo
-
-Two concurrent resets produced orphaned invoice rows — invoices pointing to debtors that had already been deleted by the first reset. The invoice list query crashed with a Prisma relation error.
-
-**Root cause:** SQLite doesn't enforce foreign keys by default. `PRAGMA foreign_keys = ON` must be explicitly set per connection — it's not a schema-level setting. Without it, deleting debtors while their invoices still exist succeeds silently.
-
-**Fix:** Enabled `PRAGMA foreign_keys = ON` in `db.js` on connect (the actual root fix). Also added an in-memory concurrency lock on the reset endpoint — a second request while a reset is in progress returns 429 immediately.
+frontend/         React · Vite · Tailwind CSS
+  Recovery Dashboard     Live ledger · invoice table · tick mechanism
+  Invoice Detail         Full audit trail per invoice (straight from events table)
+  Debtor Reliability     Per-debtor reliability score · promise history
+  Exceptions Panel       LEGAL_FLAG invoices — honest, not hidden
+```
 
 ---
 
-## Stack
+## What broke (read this — it's more useful than what worked)
 
-**Backend:** Node.js · Express · Prisma ORM · SQLite · `@google/genai` · Razorpay Node SDK
+**1. Gemini's API key format changed mid-build.**
+Google migrated from `AIza...` Standard keys to `AQ...` Auth keys in June 2026. Our SDK was outdated and rejected the new format with `401 UNAUTHENTICATED`. The error message said "invalid key" even though the key was correct, which sent us hunting in the wrong direction. Fix: updated `@google/generative-ai` to latest, forced `dotenv.config({ override: true })` after discovering a stale Windows environment variable was winning over `.env` (dotenv's default doesn't overwrite existing env vars).
 
-**Frontend:** React 18 · Vite · Tailwind CSS
+**2. Webhook handler crashed on first real payment.**
+`express.json()` was consuming the request body globally before our webhook route could read the raw bytes needed for Razorpay's HMAC signature verification. Error: `"stream is not readable"`. Fix: mounted the webhook route before `express.json()` using `express.raw({ type: 'application/json' })` specifically for that path — a standard pattern we should have used from the start.
 
-**AI:** Gemini 3.1 Flash Lite (via `@google/genai`, AQ. key format)
+**3. Double-click on Reset Demo caused a race condition.**
+Two concurrent resets ran simultaneously — the first deleted debtors while the second was still inserting invoices that referenced them, producing orphaned rows that crashed the invoice list query. Fix: in-memory concurrency lock on the reset endpoint (returns `429` on concurrent call) + enabled `PRAGMA foreign_keys = ON` on SQLite, which is **off by default** and was the real root cause that allowed orphaned rows to exist at all.
 
-**Payments:** Razorpay Payment Links API · `payment.captured` webhook with HMAC verification
+None of these were logic bugs. All three were environment and integration issues you only find by building against real APIs.
 
 ---
 
-## Run It
+## Running locally
 
 ```bash
-# 1. Clone
-git clone https://github.com/omjee45/PayBack.git && cd PayBack
+# Clone
+git clone https://github.com/omjee45/PayBack
+cd PayBack
 
-# 2. Backend
+# Backend
 cd backend
-cp .env.example .env          # fill in GEMINI_API_KEY, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
+cp .env.example .env
+# Fill in RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET, GEMINI_API_KEY
 npm install
-npm run db:push               # create SQLite schema
-npm run seed                  # 55 invoices, 18 debtors, 14 promises
-npm run dev                   # starts on :3001
+npx prisma migrate dev
+node prisma/seed.js
+npm run dev          # runs on :3001
 
-# 3. Frontend (new terminal)
-cd frontend
+# Frontend (separate terminal)
+cd ../frontend
 npm install
-npm run dev                   # starts on :3000
-```
+npm run dev          # runs on :5173
 
-Open `http://localhost:3000`. Click **Tick Day** to advance the demo clock. Click **Simulate Reply** on any invoice to test Gemini promise extraction.
-
-**Razorpay webhooks (local testing):**
-```bash
-# Use cloudflared or ngrok to expose :3001, then set the tunnel URL as webhook endpoint in Razorpay Dashboard
+# Webhook tunnel (separate terminal, for payment testing)
 cloudflared tunnel --url http://localhost:3001
+# Paste the generated URL into Razorpay Dashboard → Settings → Webhooks
 ```
+
+**Test card for Razorpay test mode:**
+`4012 8888 8888 1881` · Expiry: any future · CVV: any 3 digits · OTP: `123456`
 
 ---
 
-## Repo
+## Demo flow (in order)
 
-[github.com/omjee45/PayBack](https://github.com/omjee45/PayBack)
+1. Open dashboard — see full recovery ledger across 55 invoices
+2. Click **Tick Day** — watch 6 broken promises escalate simultaneously, tier skipped
+3. Click into any invoice — read the Gemini-generated Hinglish reminder
+4. Use **Simulate Reply** on a GENTLE invoice — type a casual Hinglish promise, watch Gemini extract a date
+5. Create a new invoice → open its Payment Link → pay with test card → watch the webhook flip it to PAID instantly
+6. Show the "Could Not Recover" panel — 5 honest exceptions, not hidden
 
 ---
 
 ## Built by
+[github.com/omjee45](https://github.com/omjee45)
 
-**[Your Name] · [College] · [Year]**
+---
 
-Razorpay Hackathon 2026 — Track 03: AI Revenue Recovery
+<div align="center">
+
+*Razorpay Hackathon 2026 · Track 03: AI Revenue Recovery*
+
+</div>
