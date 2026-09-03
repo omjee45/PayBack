@@ -18,14 +18,25 @@ const { GoogleGenAI } = require('@google/genai');
 
 // ─── System instruction (moved into Gemini model config) ─────────────────
 
-const BASE_SYSTEM = `You are a professional B2B collections assistant for an Indian SME.
+// Language-specific system prompts — separate to avoid Gemini ignoring soft hints
+const BASE_SYSTEM_EN = `You are a professional B2B collections assistant for an Indian SME.
 Generate a payment reminder message for a debtor. Match tone to the escalation tier:
 - GENTLE: friendly, assumes oversight, no pressure
 - FIRM: direct, states consequences of continued delay, still respectful
 - ESCALATION: serious, references prior contact attempts, states next step is formal/legal review — but stays professional, never threatening or abusive
 
-If language is 'hi-en', write natural Hinglish (Hindi-English code-mixed, as spoken in Indian business WhatsApp messages) — not pure Hindi, not overly formal.
+You MUST write the entire message in English only.
+Output: plain message text only, WhatsApp-appropriate length (2-4 sentences). No subject line. No sign-off.`;
 
+const BASE_SYSTEM_HIEN = `You are a professional B2B collections assistant for an Indian SME.
+Generate a payment reminder message for a debtor. Match tone to the escalation tier:
+- GENTLE: friendly, assumes oversight, no pressure
+- FIRM: direct, states consequences of continued delay, still respectful
+- ESCALATION: serious, references prior contact attempts, states next step is formal/legal review — but stays professional, never threatening or abusive
+
+You MUST write this entire message in Hinglish (Hindi-English code-mixed). This is MANDATORY — do NOT write in pure English or pure Hindi.
+Hinglish means: Hindi grammar and sentence flow, with English words mixed in naturally, exactly as spoken in Indian business WhatsApp messages.
+Example style: "Bhai, aapka ₹X ka payment 10 din se pending hai. Please aaj hi transfer kar dijiye, warna hum aage ki action lenge."
 Output: plain message text only, WhatsApp-appropriate length (2-4 sentences). No subject line. No sign-off.`;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -37,10 +48,47 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// ─── Hinglish validator ───────────────────────────────────────────────────
+
+// A response passes if it contains at least 2 common Hindi/Hinglish words.
+// This catches pure-English responses from Gemini for hi-en requests.
+const HINDI_MARKERS = [
+  'aap', 'aapka', 'aapke', 'aapki', 'hai', 'hain', 'kar', 'karo', 'karein',
+  'ki', 'ke', 'ka', 'ko', 'se', 'mein', 'ji', 'bhai', 'din', 'tha', 'tha',
+  'toh', 'warna', 'please', 'nahi', 'ho', 'hua', 'liye', 'tak', 'ab',
+  'humne', 'hum', 'yeh', 'aaj', 'kal', 'namaste', 'turant', 'payment',
+];
+
+function looksLikeHinglish(text) {
+  const lower = text.toLowerCase();
+  const hits = HINDI_MARKERS.filter(w => {
+    // whole-word match to avoid false positives (e.g. "taken" contains "ke")
+    const re = new RegExp(`\\b${w}\\b`);
+    return re.test(lower);
+  });
+  return hits.length >= 2;
+}
+
+// ─── Internal Gemini caller ───────────────────────────────────────────────
+
+async function callGemini(genAI, systemInstruction, userPrompt) {
+  const result = await genAI.models.generateContent({
+    model: 'gemini-3.1-flash-lite',
+    contents: userPrompt,
+    config: { systemInstruction },
+  });
+  const text = typeof result.text === 'function'
+    ? result.text()
+    : (result.text || (result.response && result.response.text && result.response.text()) || '');
+  return text.trim();
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────
 
 /**
  * Generates a reminder message via Gemini API, falls back to templates if key is absent.
+ * For hi-en debtors: validates Hinglish output, retries once if pure English detected,
+ * then falls back to deterministic Hinglish template — never ships English to hi-en debtor.
  * @param {ReminderParams} params
  * @returns {Promise<string>}
  */
@@ -53,11 +101,17 @@ async function generateReminder(params) {
     return template({ debtorName, tier, language, daysOverdue, brokenPromiseDate, amtStr, dateStr });
   }
 
+  const BASE_SYSTEM = language === 'hi-en' ? BASE_SYSTEM_HIEN : BASE_SYSTEM_EN;
+
   const brokenCtx = brokenPromiseDate
     ? `\n\nIMPORTANT: This debtor previously promised to pay by ${brokenPromiseDate} and did NOT pay. Explicitly and politely reference this broken commitment in your message.`
     : '';
 
   const systemInstruction = BASE_SYSTEM + brokenCtx;
+
+  const langDirective = language === 'hi-en'
+    ? 'IMPORTANT: Write the entire message in Hinglish (Hindi-English code-mixed). Do NOT write in pure English.'
+    : 'Write the message in English.';
 
   const userPrompt = [
     `Generate a ${tier} reminder.`,
@@ -65,25 +119,37 @@ async function generateReminder(params) {
     `Amount due: ${amtStr}`,
     `Due date: ${dateStr}`,
     `Days overdue: ${daysOverdue}`,
-    `Language: ${language}`,
+    langDirective,
   ].join('\n');
 
   try {
     const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const result = await genAI.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: userPrompt,
-      config: {
-        systemInstruction,
+
+    // First attempt
+    let text = await callGemini(genAI, systemInstruction, userPrompt);
+
+    // Hinglish safety net: if hi-en response looks like pure English, retry once
+    if (language === 'hi-en' && !looksLikeHinglish(text)) {
+      console.warn(`[ReminderGenerator] hi-en response looks like pure English — retrying with stricter prompt`);
+      const retryPrompt = userPrompt +
+        '\n\nCRITICAL: Your previous response was in English. That violates instructions. ' +
+        'Regenerate this message STRICTLY in Hinglish (Hindi-English code-mixed). Every sentence must contain Hindi words.';
+      text = await callGemini(genAI, systemInstruction, retryPrompt);
+
+      // If retry still fails the check, use the deterministic Hinglish template
+      if (!looksLikeHinglish(text)) {
+        console.warn(`[ReminderGenerator] hi-en retry still English — using Hinglish template fallback`);
+        return template({ debtorName, tier, language, daysOverdue, brokenPromiseDate, amtStr, dateStr });
       }
-    });
-    const text = typeof result.text === 'function' ? result.text() : (result.text || (result.response && result.response.text && result.response.text()) || '');
-    return text.trim();
+    }
+
+    return text;
   } catch (err) {
     console.error('[ReminderGenerator] Gemini error — falling back to template:', err.message);
     return template({ debtorName, tier, language, daysOverdue, brokenPromiseDate, amtStr, dateStr });
   }
 }
+
 
 // ─── Template fallback ────────────────────────────────────────────────────
 

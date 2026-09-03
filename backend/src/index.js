@@ -21,16 +21,10 @@ app.use(cors({
   credentials: true,
 }));
 
-// ── Raw body capture (for Razorpay webhook signature verification) ─────────
-app.use((req, _res, next) => {
-  if (req.path.startsWith('/api/webhooks')) {
-    let raw = '';
-    req.on('data', chunk => { raw += chunk; });
-    req.on('end',  ()    => { req.rawBody = raw; next(); });
-  } else {
-    next();
-  }
-});
+// ── Raw body capture for webhooks is now handled inline on the route ───────
+
+// ── Webhooks (must be mounted BEFORE express.json() to capture raw buffer) ─
+app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhooksRouter);
 
 app.use(express.json());
 
@@ -39,7 +33,6 @@ app.set('json replacer', (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 app.use('/api/invoices',  invoicesRouter);
-app.use('/api/webhooks',  webhooksRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/debtors',   debtorsRouter);
 app.use('/api/cron',      cronRouter);

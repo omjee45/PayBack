@@ -12,7 +12,8 @@ const router = express.Router();
  * This is the critical stopping rule: fires regardless of current invoice state.
  */
 router.post('/razorpay', async (req, res) => {
-  const rawBody  = req.rawBody ?? JSON.stringify(req.body ?? {});
+  // With express.raw(), req.body is a Buffer containing the exact raw bytes
+  const rawBody  = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
   const signature= req.headers['x-razorpay-signature'] ?? '';
   const secret   = process.env.RAZORPAY_WEBHOOK_SECRET ?? '';
 

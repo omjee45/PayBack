@@ -29,9 +29,15 @@ router.get('/', async (req, res) => {
       include: { debtor: true },
       orderBy: { updatedAt: 'desc' },
     });
-    res.json(invoices.map(i => ({ ...ser(i), daysOverdue: daysOverdue(i.dueDate) })));
+    // Extra guard: skip any orphan rows that somehow slipped through
+    res.json(
+      invoices
+        .filter(i => i.debtor != null)
+        .map(i => ({ ...ser(i), daysOverdue: daysOverdue(i.dueDate) }))
+    );
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
 
 // ── GET /api/invoices/:id ──────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
@@ -49,6 +55,38 @@ router.get('/:id', async (req, res) => {
     res.json({ ...ser(inv), daysOverdue: daysOverdue(inv.dueDate) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// ── POST /api/invoices/:id/payment-link ────────────────────────────────────
+// Generate (or regenerate) a real Razorpay Payment Link for any invoice.
+// Useful for seeded invoices that never had a real link created.
+router.post('/:id/payment-link', async (req, res) => {
+  try {
+    const inv = await prisma.invoice.findUnique({
+      where:   { id: req.params.id },
+      include: { debtor: true },
+    });
+    if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+    if (inv.status === 'PAID') return res.status(400).json({ error: 'Invoice already PAID' });
+
+    const link = await createPaymentLink({
+      amountPaise:  Number(inv.amountPaise),
+      invoiceId:    inv.id,
+      debtorName:   inv.debtor.name,
+      debtorEmail:  inv.debtor.contactEmail,
+      debtorPhone:  inv.debtor.contactPhone,
+      description:  `Invoice — ₹${(Number(inv.amountPaise) / 100).toLocaleString('en-IN')} (${inv.debtor.name})`,
+    });
+
+    const updated = await prisma.invoice.update({
+      where:   { id: inv.id },
+      data:    { razorpayPaymentLinkId: link.id, razorpayPaymentLinkUrl: link.short_url },
+      include: { debtor: true },
+    });
+
+    res.json({ invoiceId: inv.id, paymentLinkId: link.id, paymentLinkUrl: link.short_url, ...ser(updated) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 
 // ── POST /api/invoices ─────────────────────────────────────────────────────
 const CreateSchema = z.object({
