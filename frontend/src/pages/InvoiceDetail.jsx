@@ -77,31 +77,29 @@ export default function InvoiceDetail() {
           </div>
 
           <div className="flex flex-col items-end gap-2">
-            {invoice.razorpayPaymentLinkUrl && (
-              <a href={invoice.razorpayPaymentLinkUrl} target="_blank" rel="noopener noreferrer"
-                className="btn-ghost text-xs gap-1.5">
-                Payment Link <ExternalLink size={12} />
-              </a>
-            )}
-            {!invoice.razorpayPaymentLinkUrl?.includes('rzp.io/i/') && (
-              <button 
-                onClick={async () => {
-                  setGeneratingLink(true)
-                  try {
-                    const res = await api.generatePaymentLink(id)
-                    setInv(prev => ({ ...prev, razorpayPaymentLinkUrl: res.paymentLinkUrl }))
-                  } catch (e) {
-                    alert('Failed to generate link: ' + e.message)
-                  } finally {
-                    setGeneratingLink(false)
-                  }
-                }} 
-                disabled={generatingLink}
-                className="btn-primary text-xs gap-1.5"
-              >
-                {generatingLink ? 'Generating...' : 'Generate Real Link'}
-              </button>
-            )}
+            <button
+              disabled={generatingLink}
+              onClick={async () => {
+                if (invoice.razorpayPaymentLinkUrl?.includes('rzp.io/i/')) {
+                  window.open(invoice.razorpayPaymentLinkUrl, '_blank')
+                  return
+                }
+                setGeneratingLink(true)
+                try {
+                  const res = await api.generatePaymentLink(id)
+                  const url = res.paymentLinkUrl
+                  setInv(prev => ({ ...prev, razorpayPaymentLinkUrl: url }))
+                  window.open(url, '_blank')
+                } catch (e) {
+                  alert('Failed to generate link: ' + e.message)
+                } finally {
+                  setGeneratingLink(false)
+                }
+              }}
+              className="btn-ghost text-xs gap-1.5"
+            >
+              {generatingLink ? 'Opening...' : <><span>Payment Link</span><ExternalLink size={12} /></>}
+            </button>
             {canSimulate && (
               <button onClick={() => setReply(true)} className="btn-primary text-xs gap-1.5">
                 <MessageSquare size={13} /> Simulate Reply
