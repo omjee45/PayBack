@@ -1,7 +1,7 @@
 'use strict';
 
-require('dotenv').config();
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+require('dotenv').config({ override: true });
+const { GoogleGenAI } = require('@google/genai');
 
 // ─── JSDoc types ──────────────────────────────────────────────────────────
 
@@ -48,15 +48,19 @@ async function extractPromise(replyText, todayDate) {
   const userPrompt = `Today's date: ${todayDate}\nDebtor reply: "${replyText}"`;
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      systemInstruction: SYSTEM_INSTRUCTION,
-      generationConfig: { responseMimeType: 'application/json' }, // structured JSON output
+    const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const result = await genAI.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: userPrompt,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: 'application/json', // structured JSON output
+      }
     });
 
-    const result = await model.generateContent(userPrompt);
-    const parsed = JSON.parse(result.response.text());
+    // The new SDK usually returns text directly on result.text
+    const text = typeof result.text === 'function' ? result.text() : (result.text || (result.response && result.response.text && result.response.text()) || '');
+    const parsed = JSON.parse(text);
     if (typeof parsed.has_promise !== 'boolean') throw new Error('Schema mismatch');
     return parsed;
   } catch (err) {

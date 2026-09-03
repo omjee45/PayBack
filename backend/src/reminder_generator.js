@@ -1,7 +1,7 @@
 'use strict';
 
-require('dotenv').config();
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+require('dotenv').config({ override: true });
+const { GoogleGenAI } = require('@google/genai');
 
 // ─── JSDoc types ──────────────────────────────────────────────────────────
 
@@ -69,10 +69,16 @@ async function generateReminder(params) {
   ].join('\n');
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', systemInstruction });
-    const result = await model.generateContent(userPrompt);
-    return result.response.text().trim();
+    const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const result = await genAI.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: userPrompt,
+      config: {
+        systemInstruction,
+      }
+    });
+    const text = typeof result.text === 'function' ? result.text() : (result.text || (result.response && result.response.text && result.response.text()) || '');
+    return text.trim();
   } catch (err) {
     console.error('[ReminderGenerator] Gemini error — falling back to template:', err.message);
     return template({ debtorName, tier, language, daysOverdue, brokenPromiseDate, amtStr, dateStr });
