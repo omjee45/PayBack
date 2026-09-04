@@ -80,7 +80,9 @@ export default function InvoiceDetail() {
             <button
               disabled={generatingLink}
               onClick={async () => {
-                if (invoice.razorpayPaymentLinkUrl?.includes('rzp.io/i/')) {
+                const hasRealLink = invoice.razorpayPaymentLinkId?.startsWith('plink_') &&
+                                    invoice.razorpayPaymentLinkUrl?.startsWith('https://rzp.io')
+                if (hasRealLink) {
                   window.open(invoice.razorpayPaymentLinkUrl, '_blank')
                   return
                 }
