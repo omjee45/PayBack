@@ -10,7 +10,7 @@ import StatusBadge         from '../components/StatusBadge'
 
 export default function Dashboard() {
   const [summary,      setSummary]      = useState(null)
-  const [invoices,     setInvoices]     = useState([])
+  const [allInvoices,  setAllInvoices]  = useState([])
   const [debtors,      setDebtors]      = useState([])
   const [loading,      setLoading]      = useState(true)
   const [dayOffset,    setDayOffset]    = useState(0)
@@ -24,19 +24,24 @@ export default function Dashboard() {
     try {
       const [s, i, d, cs] = await Promise.all([
         api.getSummary(),
-        api.getInvoices(statusFilter),
+        api.getInvoices(),   // fetch ALL once — filter client-side
         api.getDebtors(),
         api.getCronStatus(),
       ])
       setSummary(s)
-      setInvoices(i)
+      setAllInvoices(i)
       setDebtors(d)
       setDayOffset(cs.dayOffset)
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
-  }, [statusFilter])
+  }, [])  // no statusFilter dependency — never re-fetches on tab change
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Client-side filter — instant, zero network
+  const invoices = statusFilter
+    ? allInvoices.filter(inv => inv.status === statusFilter)
+    : allInvoices
 
   const handleTick = async () => {
     setTickLoading(true)
@@ -57,7 +62,7 @@ export default function Dashboard() {
     await loadData()
   }
 
-  const exceptions = invoices.filter(i => i.status === 'LEGAL_FLAG')
+  const exceptions = allInvoices.filter(i => i.status === 'LEGAL_FLAG')
 
   return (
     <div className="p-6 animate-fade-in min-h-screen">

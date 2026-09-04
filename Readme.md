@@ -169,6 +169,20 @@ cloudflared tunnel --url http://localhost:3001
 
 ---
 
+## Running the live demo
+
+The backend is hosted on Railway's free tier, which **cold-starts after ~10 minutes of inactivity** (container spins down to save resources).
+
+**Before you start a demo:**
+1. Open the backend health endpoint in a browser tab: `https://payback-production-dff4.up.railway.app/health`
+2. Wait for it to return `{"status":"ok"}` — this wakes the container (takes ~5–15 seconds).
+3. Now open the Vercel frontend — everything will load instantly with no delay.
+
+> The `/health` endpoint exists purely for this purpose and adds zero dependencies to the app.
+
+---
+
+
 ## Built by
 [github.com/omjee45](https://github.com/omjee45)
 
