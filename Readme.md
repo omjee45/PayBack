@@ -9,6 +9,7 @@
 [![Stack](https://img.shields.io/badge/Stack-Node%20·%20Express%20·%20React%20·%20Prisma-0f172a?style=flat-square)](https://github.com/omjee45/PayBack)
 [![AI](https://img.shields.io/badge/AI-Gemini%203.1%20Flash%20Lite-4285f4?style=flat-square)](https://ai.google.dev)
 [![Payments](https://img.shields.io/badge/Payments-Razorpay%20Test%20Mode-072654?style=flat-square)](https://razorpay.com)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-pay--back--sigma.vercel.app-22c55e?style=flat-square)](https://pay-back-sigma.vercel.app)
 
 </div>
 
@@ -159,6 +160,8 @@ cloudflared tunnel --url http://localhost:3001
 ---
 
 ## Demo flow (in order)
+
+🔗 **Live:** [pay-back-sigma.vercel.app](https://pay-back-sigma.vercel.app)
 
 1. Open dashboard — see full recovery ledger across 55 invoices
 2. Click **Tick Day** — watch 6 broken promises escalate simultaneously, tier skipped
